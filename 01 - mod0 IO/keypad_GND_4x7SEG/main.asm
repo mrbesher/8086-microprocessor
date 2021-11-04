@@ -25,37 +25,33 @@ DATA    ENDS
 CODE    SEGMENT PARA 'CODE'
         ASSUME CS:CODE, DS:DATA, SS:STAK
 START:
-       MOV AX, DATA
+        MOV AX, DATA
 	MOV DS, AX
-        MOV AL, 81H
-	OUT 0AFH, AL
-	MOV BX, 0AH
-	MOV DX, 0AAAAH
-	MOV CL, 4H
+        MOV AL, 81H ; CW output: PA, PB, PCU. input: PCL
+	OUT 0AFH, AL ; set CW
+	MOV DX, 0AAAAH ; set DX to 0AH corresponding to empty 7SEG
 ENDLESS:
-        PUSH BX
-        CALL GDIGIT
-	POP BX
-	TEST CH, 1H
-	JZ  ENDLESS
-	MOV CH, 0H
-	MOV BX, AX
+        CALL GDIGIT ; doesn't exit until a key is read
+	TEST CH, 1H ; first read?
+	JZ  ENDLESS ; don't print if same keydown 
+	MOV CH, 0H  ; signaling keydown
+	MOV CL, 4H
 	SHL DX, CL
 	OR  DX, AX
 	JMP ENDLESS
 GDIGIT PROC
         ; reads a digit from keypad at 0ADH and prints current 4-digit num
 	; returns it using AL
-	; scan 3rd column
-NODIG:	MOV AX, DX
+NODIG:	MOV AX, DX ; mov current 4-digit number from DX
 	CALL LIGHT
+	; scan 3rd column
         MOV AL, 1H
 	OUT 0A9H, AL
 	IN AL, 0ADH
-	AND AL, 0FH
-	MOV BX, 4
+	AND AL, 0FH ; mask LS 4-bits (PCL)
+	MOV BX, 4 ; set offset for keys arr
 	CMP AL, 0H
-	JNZ EXIT
+	JNZ EXIT ; key detected
 	; scan 2nd column
 	MOV AL, 2H
 	OUT 0A9H, AL
@@ -74,22 +70,28 @@ NODIG:	MOV AX, DX
 	JZ  STAR
 	CMP AL, 0H
 	JNZ EXIT
-	MOV CH, 1H
+	MOV CH, 1H ; keyup / no input
 	JMP NODIG
-STAR:   MOV AX, 0AAAAH
+STAR:   MOV CX, 02FFH ; delay to make sure '*' is held down
+STILL:	IN AL, 0ADH ; read the key again (1st column is selected already)
+	AND AL, 0FH
+	TEST AL, 8H
+	JZ NODIG ; star is not pressed for a long (enough) time
+	MOV AX, DX
+	CALL LIGHT ; send digits stored in ax copied from dx
+	LOOP STILL
+	MOV AX, 0AAAAH ; set to off if survived the loop
         MOV DX, 0AAAAH
         JMP RST
-EXIT:	AND AX, 0FH
+EXIT:	AND AX, 0FH ; MASK AX to get the LS 4-bits
         MOV SI, AX
-	MOV AL, KEYS[SI+BX]
+	MOV AL, KEYS[SI+BX] ; Get the digit corresponding to AL[0..3]
 RST:    RET
 GDIGIT ENDP
 LIGHT PROC
-        ; Sends 4 digits (each 4 bits, total: 1 word) represented by AX
-	; Assumes DIGITS arr is defined in DS
-	PUSH AX
+        ; lights 4 BCD digits (each 4 bits, total: 1 word) represented by AX
+	; Assumes DIGITS arr is defined in DS and addresses are PC: 0ADH, PB: 0ABH
 	PUSH CX
-	PUSH BX
 	PUSH DX
 	MOV DL, 10H
 	MOV CX, 4H
@@ -110,9 +112,7 @@ DIG:	MOV SI, AX
 	MOV CX, BX ; restore CX
 	LOOP DIG
 	POP DX
-	POP BX
 	POP CX
-	POP AX
 	RET
 LIGHT ENDP
 CODE    ENDS
