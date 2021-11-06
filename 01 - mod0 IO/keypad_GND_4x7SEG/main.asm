@@ -31,17 +31,20 @@ START:
 	OUT 0AFH, AL ; set CW
 	MOV DX, 0AAAAH ; set DX to 0AH corresponding to empty 7SEG
 ENDLESS:
-        CALL GDIGIT ; doesn't exit until a key is read
-	TEST CH, 1H ; first read?
-	JZ  ENDLESS ; don't print if same keydown 
-	MOV CH, 0H  ; signaling keydown
+        CALL GDIGIND ; doesn't exit until a key is read
+	MOV SI, AX
+	MOV CH, AL
+	MOV AL, KEYS[SI+BX] ; Get the digit corresponding to AL[0..3]
 	MOV CL, 4H
 	SHL DX, CL
 	OR  DX, AX
+	CALL WNKEY
 	JMP ENDLESS
-GDIGIT PROC
-        ; reads a digit from keypad at 0ADH and prints current 4-digit num
-	; returns it using AL
+	
+
+GDIGIND PROC
+        ; reads port from keypad at 0ADH and prints current 4-digit num in DX
+	; returns port value using AL, its offset in KEYS using BX
 NODIG:	MOV AX, DX ; mov current 4-digit number from DX
 	CALL LIGHT
 	; scan 3rd column
@@ -50,7 +53,7 @@ NODIG:	MOV AX, DX ; mov current 4-digit number from DX
 	IN AL, 0ADH
 	AND AL, 0FH ; mask LS 4-bits (PCL)
 	MOV BX, 4 ; set offset for keys arr
-	CMP AL, 0H
+	TEST AL, 0FH
 	JNZ EXIT ; key detected
 	; scan 2nd column
 	MOV AL, 2H
@@ -58,7 +61,7 @@ NODIG:	MOV AX, DX ; mov current 4-digit number from DX
 	IN AL, 0ADH
 	AND AL, 0FH
 	MOV BX, -1
-	CMP AL, 0H
+	TEST AL, 0FH
 	JNZ EXIT
 	; scan 1st column
 	MOV AL, 4H
@@ -67,27 +70,45 @@ NODIG:	MOV AX, DX ; mov current 4-digit number from DX
 	AND AL, 0FH
 	MOV BX, 8
 	CMP AL, 8H
-	JZ  STAR
-	CMP AL, 0H
+	JZ  SDET
+	TEST AL, 0FH
 	JNZ EXIT
 	MOV CH, 1H ; keyup / no input
 	JMP NODIG
-STAR:   MOV CX, 02FFH ; delay to make sure '*' is held down
+SDET:   CALL STAR
+        JMP NODIG
+EXIT:	AND AX, 0FH ; MASK AX to get the LS 4-bits
+        RET
+GDIGIND ENDP
+
+STAR PROC
+        MOV CX, 02FFH ; delay to make sure '*' is held down
 STILL:	IN AL, 0ADH ; read the key again (1st column is selected already)
 	AND AL, 0FH
 	TEST AL, 8H
-	JZ NODIG ; star is not pressed for a long (enough) time
+	JZ RST ; star is not pressed for a long (enough) time
 	MOV AX, DX
 	CALL LIGHT ; send digits stored in ax copied from dx
 	LOOP STILL
 	MOV AX, 0AAAAH ; set to off if survived the loop
         MOV DX, 0AAAAH
-        JMP RST
-EXIT:	AND AX, 0FH ; MASK AX to get the LS 4-bits
-        MOV SI, AX
-	MOV AL, KEYS[SI+BX] ; Get the digit corresponding to AL[0..3]
-RST:    RET
-GDIGIT ENDP
+RST:	RET
+STAR ENDP	
+	
+
+WNKEY PROC
+        ; scans 0ADH until getting 0
+LO1:	MOV AX, DX
+        CALL LIGHT
+        IN AL, 0ADH
+	TEST AL, 0FH
+	JNZ LO1
+	;TEST AL, 0FH
+	;JNZ LO1
+	RET
+WNKEY ENDP
+
+
 LIGHT PROC
         ; lights 4 BCD digits (each 4 bits, total: 1 word) represented by AX
 	; Assumes DIGITS arr is defined in DS and addresses are PC: 0ADH, PB: 0ABH
@@ -115,5 +136,7 @@ DIG:	MOV SI, AX
 	POP CX
 	RET
 LIGHT ENDP
+
+
 CODE    ENDS
         END START
