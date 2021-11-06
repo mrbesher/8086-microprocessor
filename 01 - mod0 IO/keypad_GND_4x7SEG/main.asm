@@ -33,12 +33,11 @@ START:
 ENDLESS:
         CALL GDIGIND ; doesn't exit until a key is read
 	MOV SI, AX
-	MOV CH, AL
 	MOV AL, KEYS[SI+BX] ; Get the digit corresponding to AL[0..3]
 	MOV CL, 4H
 	SHL DX, CL
 	OR  DX, AX
-	CALL WNKEY
+	CALL WKEYUP
 	JMP ENDLESS
 	
 
@@ -51,37 +50,34 @@ NODIG:	MOV AX, DX ; mov current 4-digit number from DX
         MOV AL, 1H
 	OUT 0A9H, AL
 	IN AL, 0ADH
-	AND AL, 0FH ; mask LS 4-bits (PCL)
 	MOV BX, 4 ; set offset for keys arr
-	TEST AL, 0FH
+	AND AL, 0FH ; mask LS 4-bits (PCL) also set flags
 	JNZ EXIT ; key detected
 	; scan 2nd column
 	MOV AL, 2H
 	OUT 0A9H, AL
 	IN AL, 0ADH
-	AND AL, 0FH
 	MOV BX, -1
-	TEST AL, 0FH
+	AND AL, 0FH
 	JNZ EXIT
 	; scan 1st column
 	MOV AL, 4H
 	OUT 0A9H, AL
 	IN AL, 0ADH
-	AND AL, 0FH
 	MOV BX, 8
+	AND AL, 0FH
 	CMP AL, 8H
-	JZ  SDET
+	JZ SDET
 	TEST AL, 0FH
 	JNZ EXIT
-	MOV CH, 1H ; keyup / no input
 	JMP NODIG
-SDET:   CALL STAR
+SDET:	CALL STAR
         JMP NODIG
-EXIT:	AND AX, 0FH ; MASK AX to get the LS 4-bits
-        RET
+EXIT:   RET
 GDIGIND ENDP
 
 STAR PROC
+        ; sets AX and DX to 0AAAAH if '*' is detected for a long time
         MOV CX, 02FFH ; delay to make sure '*' is held down
 STILL:	IN AL, 0ADH ; read the key again (1st column is selected already)
 	AND AL, 0FH
@@ -92,21 +88,20 @@ STILL:	IN AL, 0ADH ; read the key again (1st column is selected already)
 	LOOP STILL
 	MOV AX, 0AAAAH ; set to off if survived the loop
         MOV DX, 0AAAAH
-RST:	RET
+RST:	XOR AL, AL
+        RET
 STAR ENDP	
 	
 
-WNKEY PROC
+WKEYUP PROC
         ; scans 0ADH until getting 0
 LO1:	MOV AX, DX
         CALL LIGHT
         IN AL, 0ADH
 	TEST AL, 0FH
 	JNZ LO1
-	;TEST AL, 0FH
-	;JNZ LO1
 	RET
-WNKEY ENDP
+WKEYUP ENDP
 
 
 LIGHT PROC
