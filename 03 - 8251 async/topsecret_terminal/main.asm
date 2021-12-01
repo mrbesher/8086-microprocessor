@@ -47,8 +47,7 @@ REQ_DATA:
     CALL END_CONN
     
     
-    
-    MOV CX, ARRSIZE
+    MOV CX, DI
     XOR SI, SI
 ME_LO:
     MOV AL, SERIALDATA[SI]
@@ -78,6 +77,7 @@ NXT_CHAR_MSG:
     RET
 GET_MSG_TO_ARR ENDP
 
+
 SEND_DATARQ PROC NEAR
     ; sends 'D' strobing the other device
     MOV DX, DATAREG
@@ -86,6 +86,7 @@ SEND_DATARQ PROC NEAR
     OUT DX, AL
     RET
 SEND_DATARQ ENDP
+
 
 INIT_CONN PROC NEAR
     ; send 'SR' and waits for 'A' as an answer
@@ -205,15 +206,6 @@ BF_NOT_TREADY:
     POP DX
     RET
 PRT_TO_BFR ENDP
-
-WAIT_A_BIT PROC NEAR
-    PUSH CX
-    MOV CX, 0FFFFH
-_WAIT_LO:
-    LOOP _WAIT_LO
-    POP CX
-    RET
-WAIT_A_BIT ENDP
 
 
 CODE    ENDS
